@@ -37,8 +37,9 @@ var Robot = class Robot extends EventEmitter {
     }
     _init() {
         console.log('Connected');
-        this._sendCommand([128]);
+        this.passiveMode();
         this.safeMode();
+        this.emit('connected');
     }
     /**
      * 
@@ -86,7 +87,8 @@ var Robot = class Robot extends EventEmitter {
             let packetId = dataStream.shift();
             let dataSize = Robot.sensorPackets[packetId].getDataSize();
             let data = dataStream.splice(0, dataSize);
-            console.log((new sensors.Data(Robot.sensorPackets[packetId], data)).toString());
+            this.emit('data', new sensors.Data(Robot.sensorPackets[packetId], data).toJSON());
+//            console.log((new sensors.Data(Robot.sensorPackets[packetId], data)).toString());
             processed += dataSize + 1;
         }
     }
@@ -168,7 +170,7 @@ var Robot = class Robot extends EventEmitter {
     getDigitalOutputState(pin) {
         return this._digitalOutputPort & (1 << pin) ? true : false;
     }
-    setPWMLowSideDruvers(driver1, driver2, driver3) {
+    setPWMLowSideDrivers(driver1, driver2, driver3) {
         this._setCommand([144, driver1, driver2, driver3]);
     }
     /*requestSensor(id) {

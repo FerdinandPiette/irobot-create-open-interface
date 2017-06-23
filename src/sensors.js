@@ -32,6 +32,12 @@ var Packet = class Packet {
         if(Array.isArray(data)) { data = this.parse(data); }
         return data >= this._dataRange[0] && data <= this._dataRange[1];
     }
+    toJSON() {
+        return {
+            id: this._id,
+            name: this._name
+        };
+    }
 };
 
 var Data = class Data {
@@ -53,6 +59,13 @@ var Data = class Data {
     }
     toString() {
         return `${this.getData()} from packet #${this.getPacket().getId()} (${this.getPacket().getName()}) at time ${new Date(this.getTimestamp())} (${this.getTimestamp()})`;
+    }
+    toJSON() {
+        return {
+            data: this._data,
+            packet: this._packet.toJSON(),
+            timestamp: this._timestamp
+        };
     }
 };
 
