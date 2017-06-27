@@ -65,20 +65,20 @@ var Robot = class Robot extends _events2.default {
     }
     _serialDataParser(serial, data) {
         this._buffer.push(...data);
-        var data = [];
         var oldBufferSize = 0;
         while (this._buffer.length > 0 && oldBufferSize !== this._buffer.length) {
             oldBufferSize = this._buffer.length;
-            while (19 !== this._buffer[0]) {
+            let data = [];
+            while (0 < this._buffer[0].length && 19 !== this._buffer[0]) {
                 data.push(this._buffer.shift());
             }
             if (0 < data.length) {
                 serial.emit('data', Buffer.from(data));
             }
 
-            if (this._buffer.length >= 3 && this._buffer.length >= this._buffer[1] + 3) {
-                var sensorData = this._buffer.splice(0, this._buffer[1] + 3);
-                var checksum = 0;
+            if (this._buffer.length > 2 && this._buffer.length >= this._buffer[1] + 3) {
+                let sensorData = this._buffer.splice(0, this._buffer[1] + 3);
+                let checksum = 0;
                 for (let i = 0; i < sensorData[1] + 3; ++i) {
                     checksum += sensorData[i];
                 }
