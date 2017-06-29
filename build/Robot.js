@@ -16,9 +16,19 @@ var _sensors = require('./sensors');
 
 var _sensors2 = _interopRequireDefault(_sensors);
 
+var _debug = require('debug');
+
+var _debug2 = _interopRequireDefault(_debug);
+
+var _cyclicBuffer = require('cyclic-buffer');
+
+var _cyclicBuffer2 = _interopRequireDefault(_cyclicBuffer);
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 //import readline from 'readline';
+var debug = (0, _debug2.default)('irobot-create-open-interface:robot');
+
 var Robot = class Robot extends _events2.default {
     /**
      * 
@@ -29,8 +39,8 @@ var Robot = class Robot extends _events2.default {
             baudrate: 57600,
             device: device
         };
-        this._buffer = [];
-        console.log('start serial', this._options.device, this._options.baudrate);
+        this._buffer = new _cyclicBuffer2.default(1024);
+        debug('New robot, starting serial', this._options.device, this._options.baudrate);
         this._serial = new _serialport2.default(this._options.device, {
             baudrate: this._options.baudrate,
             dataBits: 8,
@@ -41,14 +51,10 @@ var Robot = class Robot extends _events2.default {
             xoff: false,
             xany: false,
             parser: this._serialDataParser.bind(this) //SerialPort.parsers.readline('\n')
-        }).on('open', this._init.bind(this)).on('error', function (err) {
-            console.log('Error: ', err.message);
-        }).on('data', function (buffer) {
-            console.log('Data received:', Buffer.from(buffer));
-        }).on('sensordata', this._processSensorData.bind(this));
+        }).on('open', this._init.bind(this)).on('error', error => debug('Error', error.message)).on('data', buffer => debug('Unparsable data:', Buffer.from(buffer))).on('sensordata', this._processSensorData.bind(this)).on('errordata', (buffer, checksum) => debug('Packet error checksum:', checksum, ';', Buffer.from(buffer)));
     }
     _init() {
-        console.log('Connected');
+        debug('Serial connection: ok ; set safe mode');
         this.passiveMode();
         this.safeMode();
         this.emit('connected');
@@ -58,26 +64,29 @@ var Robot = class Robot extends _events2.default {
      */
     _sendCommand(command) {
         var buffer = Buffer.from(command);
-        console.log('set command', buffer);
+        debug('Send command:', buffer);
         this._serial.write(buffer);
         this._serial.flush();
         return this;
     }
     _serialDataParser(serial, data) {
-        this._buffer.push(...data);
+        this._buffer.put(data);
         var oldBufferSize = 0;
-        while (this._buffer.length > 0 && oldBufferSize !== this._buffer.length) {
-            oldBufferSize = this._buffer.length;
-            let data = [];
-            while (0 < this._buffer[0].length && 19 !== this._buffer[0]) {
-                data.push(this._buffer.shift());
+        while (this._buffer.size() > 0 && oldBufferSize !== this._buffer.size()) {
+            oldBufferSize = this._buffer.size();
+            let index = 0;
+            while (index < this._buffer.size() && 19 !== this._buffer[index]) {
+                ++index;
             }
-            if (0 < data.length) {
-                serial.emit('data', Buffer.from(data));
+            if (0 < index) {
+                let unparsableData = this._buffer.get(index);
+                serial.emit('data', unparsableData);
             }
 
-            if (this._buffer.length > 2 && this._buffer.length >= this._buffer[1] + 3) {
-                let sensorData = this._buffer.splice(0, this._buffer[1] + 3);
+            if (this._buffer.size() > 2 && this._buffer.size() >= this._buffer[1] + 3) {
+                let streamSize = this._buffer[1] + 3;
+                debug('buffer size', this._buffer.remaining(), '; splice size:', streamSize);
+                let sensorData = this._buffer.get(streamSize);
                 let checksum = 0;
                 for (let i = 0; i < sensorData[1] + 3; ++i) {
                     checksum += sensorData[i];
@@ -86,7 +95,7 @@ var Robot = class Robot extends _events2.default {
                 if (0 === checksum) {
                     serial.emit('sensordata', sensorData);
                 } else {
-                    serial.emit('errordata', Buffer.from(sensorData));
+                    serial.emit('errordata', sensorData, checksum);
                 }
             } else {
                 break;
@@ -94,16 +103,24 @@ var Robot = class Robot extends _events2.default {
         }
     }
     _processSensorData(dataStream) {
+        debug('Data Stream:', dataStream);
+        dataStream = [...dataStream];
         var streamCode = dataStream.shift(); // 19
         var streamDataSize = dataStream.shift();
         var processed = 0;
         while (processed < streamDataSize) {
             let packetId = dataStream.shift();
-            let dataSize = Robot.sensorPackets[packetId].getDataSize();
-            let data = dataStream.splice(0, dataSize);
-            this.emit('data', new _sensors2.default.Data(Robot.sensorPackets[packetId], data).toJSON());
-            //            console.log((new sensors.Data(Robot.sensorPackets[packetId], data)).toString());
-            processed += dataSize + 1;
+            if (Robot.sensorPackets[packetId]) {
+                let dataSize = Robot.sensorPackets[packetId].getDataSize();
+                let data = dataStream.splice(0, dataSize);
+                let packet = new _sensors2.default.Data(Robot.sensorPackets[packetId], data);
+                this.emit('data', packet.toJSON());
+                debug('New packet:', packet.toString());
+                processed += dataSize + 1;
+            } else {
+                debug('Data Stream Error: packet id', packetId, 'does not exist');
+                break;
+            }
         }
     }
     /**

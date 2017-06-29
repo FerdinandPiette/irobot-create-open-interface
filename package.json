@@ -1,7 +1,7 @@
 {
   "name": "irobot-create-open-interface",
   "version": "1.0.1",
-  "description": "",
+  "description": "An implementation of the iRobot Create - Open Interface",
   "keywords": [],
   "homepage": "https://github.com/FerdinandPiette/irobot-create-open-interface",
   "repository": {
@@ -9,7 +9,7 @@
     "url": "https://github.com/FerdinandPiette/irobot-create-open-interface.git"
   },
   "scripts": {
-    "start": "gulp run",
+    "start": "gulp rebuild",
     "clean": "gulp clean"
   },
   "author": "Ferdinand Piette",
@@ -17,8 +17,8 @@
   "main": "build/main.js",
   "dependencies": {
     "babel-runtime": "^6.23.0",
-    "config": "^1.26.1",
-    "mqtt": "^2.9.0",
+    "cyclic-buffer": "^1.0.0",
+    "debug": "^2.6.8",
     "serialport": "^4.0.7"
   },
   "devDependencies": {
